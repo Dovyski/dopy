@@ -47,37 +47,57 @@ if(!$aOutputFile) {
 }
 
 $aFunctions = array();
-$aInCommentBlock = false;
+$aWithinCommentBlock = false;
 $aCommentBlock = '';
 
 while (($aLine = fgets($aInputFile)) !== false) {
-	if($aInCommentBlock) {
+	if($aWithinCommentBlock) {
 		$aCommentBlock .= $aLine;
 
 		if(stripos($aLine, '*/') !== false) {
-			$aInCommentBlock = false;
+			$aWithinCommentBlock = false;
 			$aFunctionLine = fgets($aInputFile);
 			$aFunctions[] = array('comment' => $aCommentBlock, 'signature' => $aFunctionLine);
 		}
 	}
 
 	if(stripos($aLine, '/**') !== false) {
-		$aInCommentBlock = true;
+		$aWithinCommentBlock = true;
 		$aCommentBlock = '';
 		continue;
 	}
 }
 
-$aStatus = fwrite($aOutputFile, print_r($aFunctions, true));
-if($aStatus === false) {
-	echo 'Unable to write to output file: ' . $aOutputFile . "\n";
+if(count($aFunctions) == 0) {
+	echo 'No functions or comment blocks found. Is the input a C++ file?' . "\n";
+	echo 'Input file: ' . $aInputPath . "\n";
 	exit(3);
+}
+
+foreach($aFunctions as $aEntry) {
+	$aCommentLines = explode("\n", $aEntry['comment']);
+
+	if(count($aCommentLines) == 0) {
+		continue;
+	}
+
+	foreach($aCommentLines as $aComment) {
+		if(preg_match_all('/\\\\param ([a-zA-Z0-9]*) (.*)/m', $aComment, $aMatches) == FALSE) {
+			var_dump($aMatches);
+		}
+	}
+
+	$aStatus = fwrite($aOutputFile, print_r($aEntry, true));
+	if($aStatus === false) {
+		echo 'Unable to write to output file: ' . $aOutputFile . "\n";
+		exit(4);
+	}
 }
 
 fclose($aInputFile);
 fclose($aOutputFile);
 
-echo 'Python translation finished successfuly!' . "\n";
+echo 'Python transcribe finished successfuly!' . "\n";
 echo 'Output file: ' . $aOutputPath . "\n";
 exit(0);
 
