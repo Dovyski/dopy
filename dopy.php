@@ -46,16 +46,32 @@ if(!$aOutputFile) {
     exit(2);
 }
 
-$aChar = fgetc($aInputFile);
-while ($aChar !== false) {
-	$aStatus = fwrite($aOutputFile, $aChar);
+$aFunctions = array();
+$aInCommentBlock = false;
+$aCommentBlock = '';
 
-	if($aStatus === false) {
-		echo 'Unable to write to output file: ' . $aOutputFile . "\n";
-	    exit(3);
+while (($aLine = fgets($aInputFile)) !== false) {
+	if($aInCommentBlock) {
+		$aCommentBlock .= $aLine;
+
+		if(stripos($aLine, '*/') !== false) {
+			$aInCommentBlock = false;
+			$aFunctionLine = fgets($aInputFile);
+			$aFunctions[] = array('comment' => $aCommentBlock, 'signature' => $aFunctionLine);
+		}
 	}
 
-	$aChar = fgetc($aInputFile);
+	if(stripos($aLine, '/**') !== false) {
+		$aInCommentBlock = true;
+		$aCommentBlock = '';
+		continue;
+	}
+}
+
+$aStatus = fwrite($aOutputFile, print_r($aFunctions, true));
+if($aStatus === false) {
+	echo 'Unable to write to output file: ' . $aOutputFile . "\n";
+	exit(3);
 }
 
 fclose($aInputFile);
