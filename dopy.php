@@ -63,7 +63,7 @@ function pythonifyType($theCppThing, $theRemoveSpaces = true) {
     return $aNormalized;
 }
 
-function outputData($theOutputPath, $theData, $theInputPath) {
+function outputData($theOutputPath, $theData, $theInputPath, $theFunctionBody) {
     $aOutputFile = fopen($theOutputPath, 'w');
 
     if(!$aOutputFile) {
@@ -122,7 +122,8 @@ function outputData($theOutputPath, $theData, $theInputPath) {
             }
         }
 
-        $aOut .= "\t" . '"""' . "\n\n";
+        $aOut .= "\t" . '"""' . "\n";
+        $aOut .= "\t" . $theFunctionBody . "\n\n";
 
         $aStatus = fwrite($aOutputFile, $aOut);
 
@@ -307,6 +308,7 @@ function findFunctionsEntries($theInputFile) {
 $aOptions = array(
     "input:",
     "output:",
+    "body:",
     "help"
 );
 
@@ -320,6 +322,8 @@ if(isset($aArgs['h']) || isset($aArgs['help']) || $argc <= 2) {
      echo " --output=<path>   Path to the file where the translated Python\n";
 	 echo "                   code will be written. If the file does not exist,\n";
      echo "                   it will be created.\n";
+     echo " --body=<str>      String to be used as the body of all transcribed\n";
+     echo "                   functions. By default, \"print('TODO')\" is used as body.\n";
      echo " --help, -h        Show this help.\n";
      echo "\n";
      exit(1);
@@ -327,6 +331,7 @@ if(isset($aArgs['h']) || isset($aArgs['help']) || $argc <= 2) {
 
 $aInputPath = isset($aArgs['input']) ? $aArgs['input'] : '';
 $aOutputPath = isset($aArgs['output']) ? $aArgs['output'] : '';
+$aFunctionBody = isset($aArgs['body']) ? $aArgs['body'] : 'print(\'TODO\')';
 
 $aInputFile = fopen($aInputPath, 'r');
 
@@ -350,7 +355,7 @@ foreach($aFunctions as $aKey => $aEntry) {
     $aFunctions[$aKey]['signature_data'] = parseFunctionSignature($aEntry['signature']);
 }
 
-outputData($aOutputPath, $aFunctions, $aInputPath);
+outputData($aOutputPath, $aFunctions, $aInputPath, $aFunctionBody);
 
 echo 'Python transcribe finished successfuly!' . "\n";
 echo 'Output file: ' . $aOutputPath . "\n";
