@@ -52,9 +52,12 @@ function outputData($theOutputPath, $theData, $theInputPath) {
         $aOut = substr($aOut, 0, strlen($aOut) - 2);
         $aOut .= '):' . "\n";
         $aOut .= "\t" . '"""' . "\n";
-        $aOut .= "\t" . implode("\n\t", $aEntry['comment_data']['description']) . "\n";
+        foreach($aEntry['comment_data']['description'] as $aDescLine) {
+            $aOut .= "\t" . $aDescLine . "\n";
+        }
 
         if(count($aEntry['signature_data']['params']) > 0) {
+            $aOut .= "\n";
             $aOut .= "\t" . 'Parameters' . "\n";
             $aOut .= "\t" . '----------' . "\n";
 
@@ -65,6 +68,22 @@ function outputData($theOutputPath, $theData, $theInputPath) {
                 }
                 $aOut .= "\t" . $aParam['name'] . ': ' . normalizeType($aParam['type']) . "\n";
                 $aOut .= "\t\t" . $aEntry['comment_data']['params'][$aParam['name']] . "\n";
+            }
+        }
+
+        if(!empty($aEntry['comment_data']['return'])) {
+            $aOut .= "\n";
+            $aOut .= "\t" . 'Returns' . "\n";
+            $aOut .= "\t" . '----------' . "\n";
+            $aOut .= "\t" . $aEntry['comment_data']['return'] . "\n";
+        }
+
+        if(count($aEntry['comment_data']['sa']) > 0) {
+            $aOut .= "\n";
+            $aOut .= "\t" . 'See Also' . "\n";
+            $aOut .= "\t" . '----------' . "\n";
+            foreach($aEntry['comment_data']['sa'] as $aSaEntry) {
+                $aOut .= "\t" . $aSaEntry . "\n";
             }
         }
 
@@ -142,7 +161,8 @@ function parseFunctionSignature($theSignature) {
 
 function parseCommentBlock($theCommentBlock) {
     $aCommentLines = explode("\n", $theCommentBlock);
-    $aData = array('params' => array(), 'return' => '', 'description' => array());
+    $aData = array('params' => array(), 'return' => '', 'description' => array(), 'sa' => array());
+    $aAcceptEmpty = true;
 
 	if(count($aCommentLines) == 0) {
 		return $aData;
@@ -160,24 +180,41 @@ function parseCommentBlock($theCommentBlock) {
             $aParamName = $aMatches[1][0];
             $aParamDesc = $aMatches[2][0];
             $aData['params'][$aParamName] = $aParamDesc;
+            $aAcceptEmpty = false;
             continue;
         }
 
         // Check for comments like "\return desc"
-		if(preg_match_all('/\\\\return (.*)/m', $aComment, $aMatches) === FALSE) {
+		if(preg_match_all('/\\\\(return|sa) (.*)/m', $aComment, $aMatches) === FALSE) {
             echo 'Problem parsing file!' . "\n";
             exit(4);
 		}
 
         if(count($aMatches[0]) > 0) {
-            $aData['return'] = $aMatches[1][0];
+            $aWhat = $aMatches[1][0];
+            $aValue = $aMatches[2][0];
+
+            if($aWhat == 'return') {
+                $aData['return'] = $aValue;
+            } else {
+                $aData['sa'][] = $aValue;
+            }
+            $aAcceptEmpty = false;
             continue;
         }
 
-        // TODO: check for \sa
+        $aComment = trim($aComment);
 
-        $aData['description'][] = trim($aComment);
+        if(empty($aComment) && !$aAcceptEmpty) {
+            continue;
+        }
+
+        $aData['description'][] = $aComment;
 	}
+
+    if(empty($aData['description'][count($aData['description']) - 1])) {
+        unset($aData['description'][count($aData['description']) - 1]);
+    }
 
     return $aData;
 }
