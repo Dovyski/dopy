@@ -9,6 +9,30 @@
  * Licensed under the MIT license, see the LICENSE file.
  */
 
+function normalizeType($theCppThing) {
+    $aThings = array(
+        'true'                => 'True',
+        'false'               => 'False',
+        'constcv::String&'    => 'str',
+        'constcv::String[]'   => 'str',
+        'size_t'              => 'int',
+        'cv::InputArray'      => 'np.array',
+        'cv::Mat&'            => 'np.array',
+        'cv::Mat*'            => 'np.array',
+        'double'              => 'float',
+        'unsignedint'         => 'uint',
+        'constchar*'          => 'str',
+        'float*'              => '[float]',
+        'int*'                => '[int]',
+        'bool*'               => '[bool]'
+    );
+
+    $aCppThing = str_replace(' ', '', trim($theCppThing));
+    $aNormalized = str_replace(array_keys($aThings), array_values($aThings), $aCppThing);
+
+    return $aNormalized;
+}
+
 function outputData($theOutputPath, $theData, $theInputPath) {
     $aOutputFile = fopen($theOutputPath, 'w');
 
@@ -22,7 +46,7 @@ function outputData($theOutputPath, $theData, $theInputPath) {
         $aOut .= 'def ' . $aEntry['signature_data']['name'] . '(';
 
         foreach($aEntry['signature_data']['params'] as $aParam) {
-            $aOut .= $aParam['name'] . (!empty($aParam['default_value']) ? ' = ' . $aParam['default_value'] : '') . ', ';
+            $aOut .= $aParam['name'] . (!empty($aParam['default_value']) ? ' = ' . normalizeType($aParam['default_value']) : '') . ', ';
         }
 
         $aOut = substr($aOut, 0, strlen($aOut) - 2);
@@ -39,7 +63,7 @@ function outputData($theOutputPath, $theData, $theInputPath) {
                     echo 'WARN: ' . basename($theInputPath) . ' (line '.$aEntry['line'].') param "'.$aParam['name'].'" not documented.' . "\n";
                     continue;
                 }
-                $aOut .= "\t" . $aParam['name'] . ': ' . $aParam['type'] . "\n";
+                $aOut .= "\t" . $aParam['name'] . ': ' . normalizeType($aParam['type']) . "\n";
                 $aOut .= "\t\t" . $aEntry['comment_data']['params'][$aParam['name']] . "\n";
             }
         }
