@@ -9,6 +9,91 @@
  * Licensed under the MIT license, see the LICENSE file.
  */
 
+function parseFunctionSignature($theSignature) {
+    return array();
+}
+
+function parseCommentBlock($theCommentBlock) {
+    $aCommentLines = explode("\n", $theCommentBlock);
+    $aData = array('params' => array(), 'return' => array(), 'description' => '');
+
+	if(count($aCommentLines) == 0) {
+		return $aData;
+	}
+
+    // Parse comment lines individually
+	foreach($aCommentLines as $aComment) {
+        // Check for comments like "\param name desc"
+		if(preg_match_all('/\\\\param ([a-zA-Z0-9]*) (.*)/m', $aComment, $aMatches) === FALSE) {
+            echo 'Problem parsing file!' . "\n";
+            exit(4);
+		}
+
+        if(count($aMatches[0]) > 0) {
+            $aParamName = $aMatches[1][0];
+            $aParamDesc = $aMatches[2][0];
+            $aData['params'][$aParamName] = $aParamDesc;
+            continue;
+        }
+
+        // Check for comments like "\return desc"
+		if(preg_match_all('/\\\\return (.*)/m', $aComment, $aMatches) === FALSE) {
+            echo 'Problem parsing file!' . "\n";
+            exit(4);
+		}
+
+        if(count($aMatches[0]) > 0) {
+            $aReturnDesc = $aMatches[1][0];
+            $aData['return']['desc'] = $aReturnDesc;
+            continue;
+        }
+
+        $aData['description'] .= $aComment . ' ';
+	}
+
+    return $aData;
+}
+
+function findFunctionsEntries($theInputFile) {
+    $aFunctions = array();
+    $aWithinCommentBlock = false;
+    $aCommentBlock = '';
+
+    while (($aLine = fgets($theInputFile)) !== false) {
+    	if($aWithinCommentBlock) {
+            // We are collecting lines within a comment block.
+            $aCommentBlockEnded = stripos($aLine, '*/') !== false;
+
+    		if($aCommentBlockEnded) {
+                // We collected everything available in the current
+                // comment block, it is time to wrap it up.
+    			$aWithinCommentBlock = false;
+    			$aFunctionSignature = fgets($theInputFile);
+    			$aFunctions[] = array(
+                    'comment' => $aCommentBlock,
+                    'signature' => $aFunctionSignature
+                );
+
+                continue;
+    		}
+
+            $aCommentBlock .= $aLine;
+    	}
+
+        $aIsCommentBlockStart = stripos($aLine, '/**') !== false;
+
+    	if($aIsCommentBlockStart) {
+            // Found the start of a function comment block, so we are
+            // within a comment block from now on. Let's start collecting lines.
+    		$aWithinCommentBlock = true;
+    		$aCommentBlock = '';
+    		continue;
+    	}
+    }
+
+    return $aFunctions;
+}
+
 $aOptions = array(
     "input:",
     "output:",
@@ -43,89 +128,27 @@ if(!$aInputFile) {
 
 if(!$aOutputFile) {
     echo 'Unable to open output file: ' . $aOutputFile . "\n";
-    exit(2);
+    exit(3);
 }
 
-$aFunctions = array();
-$aWithinCommentBlock = false;
-$aCommentBlock = '';
-
-while (($aLine = fgets($aInputFile)) !== false) {
-	if($aWithinCommentBlock) {
-        // We are collecting lines withing a comment block.
-		$aCommentBlock .= $aLine;
-        $aCommentBlockEnded = stripos($aLine, '*/') !== false;
-
-		if($aCommentBlockEnded) {
-            // We collected everything available in the comment
-            // block, it is time to add a function entry.
-			$aWithinCommentBlock = false;
-			$aFunctionSignature = fgets($aInputFile);
-			$aFunctions[] = array(
-                'comment' => $aCommentBlock,
-                'signature' => $aFunctionSignature,
-                'params_docs' => array(),
-                'params' => array(),
-                'return' => array('type' => '', 'desc' => '')
-            );
-		}
-	}
-
-    $aIsCommentBlockStart = stripos($aLine, '/**') !== false;
-
-	if($aIsCommentBlockStart) {
-        // Found the start of a function comment block, so we are
-        // within a comment block from now on. Let's start collecting lines.
-		$aWithinCommentBlock = true;
-		$aCommentBlock = '';
-		continue;
-	}
-}
+$aFunctions = findFunctionsEntries($aInputFile);
 
 if(count($aFunctions) == 0) {
 	echo 'No functions or comment blocks found. Is the input a C++ file?' . "\n";
 	echo 'Input file: ' . $aInputPath . "\n";
-	exit(3);
+	exit(4);
 }
 
-// Let's parse the lines previously collected as function comments
-foreach($aFunctions as $aEntry) {
-	$aCommentLines = explode("\n", $aEntry['comment']);
+// Let's parse the function entries previously collected
+foreach($aFunctions as $aKey => $aEntry) {
+    $aFunctions[$aKey]['comment_data'] = parseCommentBlock($aEntry['comment']);
+    $aFunctions[$aKey]['signature_data'] = parseFunctionSignature($aEntry['signature']);
+}
 
-	if(count($aCommentLines) == 0) {
-		continue;
-	}
-
-	foreach($aCommentLines as $aComment) {
-        // Parse comments like "\param name desc"
-		if(preg_match_all('/\\\\param ([a-zA-Z0-9]*) (.*)/m', $aComment, $aMatches) === FALSE) {
-            echo 'Problem parsing file!' . "\n";
-            exit(4);
-		}
-
-        if(count($aMatches[0]) > 0) {
-            $aParamName = $aMatches[1][0];
-            $aParamDesc = $aMatches[2][0];
-            $aEntry['params_docs'][$aParamName] = $aParamDesc;
-        }
-
-        // Parse comments like "\return desc"
-		if(preg_match_all('/\\\\return (.*)/m', $aComment, $aMatches) === FALSE) {
-            echo 'Problem parsing file!' . "\n";
-            exit(4);
-		}
-
-        if(count($aMatches[0]) > 0) {
-            $aReturnDesc = $aMatches[1][0];
-            $aEntry['return']['desc'] = $aReturnDesc;
-        }
-	}
-
-	$aStatus = fwrite($aOutputFile, print_r($aEntry, true));
-	if($aStatus === false) {
-		echo 'Unable to write to output file: ' . $aOutputFile . "\n";
-		exit(4);
-	}
+$aStatus = fwrite($aOutputFile, print_r($aFunctions, true));
+if($aStatus === false) {
+    echo 'Unable to write to output file: ' . $aOutputFile . "\n";
+    exit(5);
 }
 
 fclose($aInputFile);
