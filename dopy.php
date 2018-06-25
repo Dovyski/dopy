@@ -52,16 +52,30 @@ $aCommentBlock = '';
 
 while (($aLine = fgets($aInputFile)) !== false) {
 	if($aWithinCommentBlock) {
+        // We are collecting lines withing a comment block.
 		$aCommentBlock .= $aLine;
+        $aCommentBlockEnded = stripos($aLine, '*/') !== false;
 
-		if(stripos($aLine, '*/') !== false) {
+		if($aCommentBlockEnded) {
+            // We collected everything available in the comment
+            // block, it is time to add a function entry.
 			$aWithinCommentBlock = false;
-			$aFunctionLine = fgets($aInputFile);
-			$aFunctions[] = array('comment' => $aCommentBlock, 'signature' => $aFunctionLine);
+			$aFunctionSignature = fgets($aInputFile);
+			$aFunctions[] = array(
+                'comment' => $aCommentBlock,
+                'signature' => $aFunctionSignature,
+                'params_docs' => array(),
+                'params' => array(),
+                'return' => array('type' => '', 'desc' => '')
+            );
 		}
 	}
 
-	if(stripos($aLine, '/**') !== false) {
+    $aIsCommentBlockStart = stripos($aLine, '/**') !== false;
+
+	if($aIsCommentBlockStart) {
+        // Found the start of a function comment block, so we are
+        // within a comment block from now on. Let's start collecting lines.
 		$aWithinCommentBlock = true;
 		$aCommentBlock = '';
 		continue;
@@ -74,6 +88,7 @@ if(count($aFunctions) == 0) {
 	exit(3);
 }
 
+// Let's parse the lines previously collected as function comments
 foreach($aFunctions as $aEntry) {
 	$aCommentLines = explode("\n", $aEntry['comment']);
 
@@ -82,9 +97,28 @@ foreach($aFunctions as $aEntry) {
 	}
 
 	foreach($aCommentLines as $aComment) {
-		if(preg_match_all('/\\\\param ([a-zA-Z0-9]*) (.*)/m', $aComment, $aMatches) == FALSE) {
-			var_dump($aMatches);
+        // Parse comments like "\param name desc"
+		if(preg_match_all('/\\\\param ([a-zA-Z0-9]*) (.*)/m', $aComment, $aMatches) === FALSE) {
+            echo 'Problem parsing file!' . "\n";
+            exit(4);
 		}
+
+        if(count($aMatches[0]) > 0) {
+            $aParamName = $aMatches[1][0];
+            $aParamDesc = $aMatches[2][0];
+            $aEntry['params_docs'][$aParamName] = $aParamDesc;
+        }
+
+        // Parse comments like "\return desc"
+		if(preg_match_all('/\\\\return (.*)/m', $aComment, $aMatches) === FALSE) {
+            echo 'Problem parsing file!' . "\n";
+            exit(4);
+		}
+
+        if(count($aMatches[0]) > 0) {
+            $aReturnDesc = $aMatches[1][0];
+            $aEntry['return']['desc'] = $aReturnDesc;
+        }
 	}
 
 	$aStatus = fwrite($aOutputFile, print_r($aEntry, true));
