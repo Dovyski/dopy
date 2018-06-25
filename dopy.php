@@ -75,11 +75,16 @@ function outputData($theOutputPath, $theData, $theInputPath) {
         $aOut = '';
         $aOut .= 'def ' . $aEntry['signature_data']['name'] . '(';
 
-        foreach($aEntry['signature_data']['params'] as $aParam) {
-            $aOut .= $aParam['name'] . (!empty($aParam['default_value']) ? ' = ' . pythonifyType($aParam['default_value']) : '') . ', ';
+        $aHasParams = count($aEntry['signature_data']['params']) > 0;
+
+        if($aHasParams) {
+            foreach($aEntry['signature_data']['params'] as $aParam) {
+                $aOut .= $aParam['name'] . (!empty($aParam['default_value']) ? ' = ' . pythonifyType($aParam['default_value']) : '') . ', ';
+            }
+
+            $aOut = substr($aOut, 0, strlen($aOut) - 2);
         }
 
-        $aOut = substr($aOut, 0, strlen($aOut) - 2);
         $aOut .= '):' . "\n";
         $aOut .= "\t" . '"""' . "\n";
         foreach($aEntry['comment_data']['description'] as $aDescLine) {
@@ -126,8 +131,6 @@ function outputData($theOutputPath, $theData, $theInputPath) {
             exit(4);
         }
     }
-
-
 
     fclose($aOutputFile);
 }
