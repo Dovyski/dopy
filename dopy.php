@@ -9,7 +9,7 @@
  * Licensed under the MIT license, see the LICENSE file.
  */
 
-function outputData($theOutputPath, $theData) {
+function outputData($theOutputPath, $theData, $theInputPath) {
     $aOutputFile = fopen($theOutputPath, 'w');
 
     if(!$aOutputFile) {
@@ -35,6 +35,10 @@ function outputData($theOutputPath, $theData) {
             $aOut .= "\t" . '----------' . "\n";
 
             foreach($aEntry['signature_data']['params'] as $aParam) {
+                if(!isset($aEntry['comment_data']['params'][$aParam['name']])) {
+                    echo 'WARN: ' . basename($theInputPath) . ' (line '.$aEntry['line'].') param "'.$aParam['name'].'" not documented.' . "\n";
+                    continue;
+                }
                 $aOut .= "\t" . $aParam['name'] . ': ' . $aParam['type'] . "\n";
                 $aOut .= "\t\t" . $aEntry['comment_data']['params'][$aParam['name']] . "\n";
             }
@@ -74,7 +78,7 @@ function parseFunctionSignature($theSignature) {
     }
 
     // Parse list of arguments
-    $aParamsString = str_replace(');', '', $aMainParts[1]);
+    $aParamsString = str_replace(')', '', $aMainParts[1]);
     $aParamParts = explode(',', $aParamsString);
 
     if(count($aParamParts) > 0) {
@@ -90,17 +94,22 @@ function parseFunctionSignature($theSignature) {
 
             $aTypeNameParts = explode(' ', $aTypeNameString);
             for($i = 0; $i < count($aTypeNameParts) - 1; $i++) {
-                $aEntry['type'] .= $aTypeNameParts[$i] . ' ';
+                $aEntry['type'] .= trim($aTypeNameParts[$i]) . ' ';
             }
-            $aEntry['name'] = $aTypeNameParts[$i];
+            $aEntry['name'] = trim($aTypeNameParts[$i]);
 
-            if(stripos($aEntry['name'], '[') !== false) {
-                // Type is an array.
-                $aEntry['name'] = str_replace(array('[', ']'), '', $aEntry['name']);
-                $aEntry['type'] .= '[]';
+            // Check for special types, i.e. arrays/pointers
+            $aIsArray = stripos($aEntry['name'], '[') !== false;
+            $aIsPointer = stripos($aEntry['name'], '*') !== false || stripos($aEntry['name'], '&') !== false;
+
+            if($aIsArray || $aIsPointer) {
+                $aEntry['name'] = str_replace(array('[', ']', '*', '&'), '', $aEntry['name']);
+                $aEntry['type'] .= $aIsArray ? '[]' : '*';
             }
 
-            $aRet['params'][] = $aEntry;
+            if($aEntry['name'] != '...' && $aEntry['name'] != '') {
+                $aRet['params'][] = $aEntry;
+            }
         }
     }
 
@@ -153,8 +162,11 @@ function findFunctionsEntries($theInputFile) {
     $aFunctions = array();
     $aWithinCommentBlock = false;
     $aCommentBlock = '';
+    $aLineCount = 0;
 
     while (($aLine = fgets($theInputFile)) !== false) {
+        $aLineCount++;
+
     	if($aWithinCommentBlock) {
             // We are collecting lines within a comment block.
             $aCommentBlockEnded = stripos($aLine, '*/') !== false;
@@ -164,15 +176,18 @@ function findFunctionsEntries($theInputFile) {
                 // comment block, it is time to wrap it up.
     			$aWithinCommentBlock = false;
     			$aFunctionSignature = fgets($theInputFile);
+                $aLineCount++;
 
                 if(stripos($aFunctionSignature, 'template <') !== false) {
                     // Template declaration, not funciton signature.
                     $aFunctionSignature = fgets($theInputFile);
+                    $aLineCount++;
                 }
 
     			$aFunctions[] = array(
-                    'comment' => $aCommentBlock,
-                    'signature' => $aFunctionSignature
+                    'comment' => trim($aCommentBlock),
+                    'signature' => str_replace(';', '', trim($aFunctionSignature)),
+                    'line' => $aLineCount
                 );
 
                 continue;
@@ -241,7 +256,7 @@ foreach($aFunctions as $aKey => $aEntry) {
     $aFunctions[$aKey]['signature_data'] = parseFunctionSignature($aEntry['signature']);
 }
 
-outputData($aOutputPath, $aFunctions);
+outputData($aOutputPath, $aFunctions, $aInputPath);
 
 echo 'Python transcribe finished successfuly!' . "\n";
 echo 'Output file: ' . $aOutputPath . "\n";
