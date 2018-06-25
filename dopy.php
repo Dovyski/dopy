@@ -10,12 +10,60 @@
  */
 
 function parseFunctionSignature($theSignature) {
-    return array();
+    $aRet = array('name' => '', 'return' => '', 'params' => array());
+    $aMainParts = explode('(', $theSignature);
+
+    $aReturnParts = explode(' ', $aMainParts[0]);
+    $aItems = 0;
+
+    // Parse return type and function name
+    foreach($aReturnParts as $aPart) {
+        if(!empty($aPart) && $aItems == 0) {
+            $aRet['return'] = $aPart;
+
+        } else if(!empty($aPart) && $aItems == 1) {
+            $aRet['name'] = $aPart;
+        }
+        $aItems++;
+    }
+
+    // Parse list of arguments
+    $aParamsString = str_replace(');', '', $aMainParts[1]);
+    $aParamParts = explode(',', $aParamsString);
+
+    if(count($aParamParts) > 0) {
+        foreach($aParamParts as $aParamEntry) {
+            $aEntry = array('name' => '', 'type' => '', 'default_value' => '');
+            $aTypeNameString = $aParamEntry;
+
+            $aValueParts = explode('=', $aTypeNameString);
+            if(count($aValueParts) > 1) {
+                $aEntry['default_value'] = trim($aValueParts[1]);
+                $aTypeNameString = trim($aValueParts[0]);
+            }
+
+            $aTypeNameParts = explode(' ', $aTypeNameString);
+            for($i = 0; $i < count($aTypeNameParts) - 1; $i++) {
+                $aEntry['type'] .= $aTypeNameParts[$i] . ' ';
+            }
+            $aEntry['name'] = $aTypeNameParts[$i];
+
+            if(stripos($aEntry['name'], '[') !== false) {
+                // Type is an array.
+                $aEntry['name'] = str_replace(array('[', ']'), '', $aEntry['name']);
+                $aEntry['type'] .= '[]';
+            }
+
+            $aRet['params'][] = $aEntry;
+        }
+    }
+
+    return $aRet;
 }
 
 function parseCommentBlock($theCommentBlock) {
     $aCommentLines = explode("\n", $theCommentBlock);
-    $aData = array('params' => array(), 'return' => array(), 'description' => '');
+    $aData = array('params' => array(), 'return' => '', 'description' => '');
 
 	if(count($aCommentLines) == 0) {
 		return $aData;
@@ -43,8 +91,7 @@ function parseCommentBlock($theCommentBlock) {
 		}
 
         if(count($aMatches[0]) > 0) {
-            $aReturnDesc = $aMatches[1][0];
-            $aData['return']['desc'] = $aReturnDesc;
+            $aData['return'] = $aMatches[1][0];
             continue;
         }
 
@@ -69,6 +116,12 @@ function findFunctionsEntries($theInputFile) {
                 // comment block, it is time to wrap it up.
     			$aWithinCommentBlock = false;
     			$aFunctionSignature = fgets($theInputFile);
+
+                if(stripos($aFunctionSignature, 'template <') !== false) {
+                    // Template declaration, not funciton signature.
+                    $aFunctionSignature = fgets($theInputFile);
+                }
+
     			$aFunctions[] = array(
                     'comment' => $aCommentBlock,
                     'signature' => $aFunctionSignature
