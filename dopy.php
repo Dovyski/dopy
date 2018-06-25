@@ -9,6 +9,52 @@
  * Licensed under the MIT license, see the LICENSE file.
  */
 
+function outputData($theOutputPath, $theData) {
+    $aOutputFile = fopen($theOutputPath, 'w');
+
+    if(!$aOutputFile) {
+        echo 'Unable to open output file: ' . $aOutputFile . "\n";
+        exit(3);
+    }
+
+    foreach($theData as $aEntry) {
+        $aOut = '';
+        $aOut .= 'def ' . $aEntry['signature_data']['name'] . '(';
+
+        foreach($aEntry['signature_data']['params'] as $aParam) {
+            $aOut .= $aParam['name'] . (!empty($aParam['default_value']) ? ' = ' . $aParam['default_value'] : '') . ', ';
+        }
+
+        $aOut = substr($aOut, 0, strlen($aOut) - 2);
+        $aOut .= '):' . "\n";
+        $aOut .= "\t" . '"""' . "\n";
+        $aOut .= "\t" . implode("\n\t", $aEntry['comment_data']['description']) . "\n";
+
+        if(count($aEntry['signature_data']['params']) > 0) {
+            $aOut .= "\t" . 'Parameters' . "\n";
+            $aOut .= "\t" . '----------' . "\n";
+
+            foreach($aEntry['signature_data']['params'] as $aParam) {
+                $aOut .= "\t" . $aParam['name'] . ': ' . $aParam['type'] . "\n";
+                $aOut .= "\t\t" . $aEntry['comment_data']['params'][$aParam['name']] . "\n";
+            }
+        }
+
+        $aOut .= "\t" . '"""' . "\n\n";
+
+        $aStatus = fwrite($aOutputFile, $aOut);
+
+        if($aStatus === false) {
+            echo 'Unable to write to output file: ' . $theOutputPath . "\n";
+            exit(4);
+        }
+    }
+
+
+
+    fclose($aOutputFile);
+}
+
 function parseFunctionSignature($theSignature) {
     $aRet = array('name' => '', 'return' => '', 'params' => array());
     $aMainParts = explode('(', $theSignature);
@@ -63,7 +109,7 @@ function parseFunctionSignature($theSignature) {
 
 function parseCommentBlock($theCommentBlock) {
     $aCommentLines = explode("\n", $theCommentBlock);
-    $aData = array('params' => array(), 'return' => '', 'description' => '');
+    $aData = array('params' => array(), 'return' => '', 'description' => array());
 
 	if(count($aCommentLines) == 0) {
 		return $aData;
@@ -95,7 +141,9 @@ function parseCommentBlock($theCommentBlock) {
             continue;
         }
 
-        $aData['description'] .= $aComment . ' ';
+        // TODO: check for \sa
+
+        $aData['description'][] = trim($aComment);
 	}
 
     return $aData;
@@ -172,19 +220,14 @@ $aInputPath = isset($aArgs['input']) ? $aArgs['input'] : '';
 $aOutputPath = isset($aArgs['output']) ? $aArgs['output'] : '';
 
 $aInputFile = fopen($aInputPath, 'r');
-$aOutputFile = fopen($aOutputPath, 'w');
 
 if(!$aInputFile) {
     echo 'Unable to open input file: ' . $aInputPath . "\n";
     exit(2);
 }
 
-if(!$aOutputFile) {
-    echo 'Unable to open output file: ' . $aOutputFile . "\n";
-    exit(3);
-}
-
 $aFunctions = findFunctionsEntries($aInputFile);
+fclose($aInputFile);
 
 if(count($aFunctions) == 0) {
 	echo 'No functions or comment blocks found. Is the input a C++ file?' . "\n";
@@ -198,14 +241,7 @@ foreach($aFunctions as $aKey => $aEntry) {
     $aFunctions[$aKey]['signature_data'] = parseFunctionSignature($aEntry['signature']);
 }
 
-$aStatus = fwrite($aOutputFile, print_r($aFunctions, true));
-if($aStatus === false) {
-    echo 'Unable to write to output file: ' . $aOutputFile . "\n";
-    exit(5);
-}
-
-fclose($aInputFile);
-fclose($aOutputFile);
+outputData($aOutputPath, $aFunctions);
 
 echo 'Python transcribe finished successfuly!' . "\n";
 echo 'Output file: ' . $aOutputPath . "\n";
