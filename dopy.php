@@ -63,7 +63,7 @@ function pythonifyType($theCppThing, $theRemoveSpaces = true) {
     return $aNormalized;
 }
 
-function outputData($theOutputPath, $theData, $theInputPath, $theFunctionBody) {
+function outputData($theOutputPath, $theData, $theInputPath, $theFunctionBody, $theStyle) {
     $aOutputFile = fopen($theOutputPath, 'w');
 
     if(!$aOutputFile) {
@@ -93,32 +93,51 @@ function outputData($theOutputPath, $theData, $theInputPath, $theFunctionBody) {
 
         if(count($aEntry['signature_data']['params']) > 0) {
             $aOut .= "\n";
-            $aOut .= "\t" . 'Parameters' . "\n";
-            $aOut .= "\t" . '----------' . "\n";
+
+            if($theStyle == 0) {
+                $aOut .= "\t" . 'Parameters' . "\n";
+                $aOut .= "\t" . '----------' . "\n";
+            } else {
+                $aOut .= "\t" . 'Args:' . "\n";
+            }
 
             foreach($aEntry['signature_data']['params'] as $aParam) {
                 if(!isset($aEntry['comment_data']['params'][$aParam['name']])) {
                     echo 'WARN: ' . basename($theInputPath) . ' (line '.$aEntry['line'].') param "'.$aParam['name'].'" not documented.' . "\n";
                     continue;
                 }
-                $aOut .= "\t" . $aParam['name'] . ': ' . pythonifyType($aParam['type']) . "\n";
-                $aOut .= "\t\t" . pythonifyString($aEntry['comment_data']['params'][$aParam['name']]) . "\n";
+                if($theStyle == 0) {
+                    $aOut .= "\t" . $aParam['name'] . ': ' . pythonifyType($aParam['type']) . "\n";
+                    $aOut .= "\t\t" . pythonifyString($aEntry['comment_data']['params'][$aParam['name']]) . "\n";
+                } else {
+                    $aOut .= "\t\t" . $aParam['name'] . ': ' . pythonifyString($aEntry['comment_data']['params'][$aParam['name']]) . "\n";
+                }
             }
         }
 
         if(!empty($aEntry['comment_data']['return'])) {
             $aOut .= "\n";
-            $aOut .= "\t" . 'Returns' . "\n";
-            $aOut .= "\t" . '----------' . "\n";
-            $aOut .= "\t" . $aEntry['comment_data']['return'] . "\n";
+            if($theStyle == 0) {
+                $aOut .= "\t" . 'Returns' . "\n";
+                $aOut .= "\t" . '----------' . "\n";
+                $aOut .= "\t" . $aEntry['comment_data']['return'] . "\n";
+            } else {
+                $aOut .= "\t" . 'Returns:' . "\n";
+                $aOut .= "\t\t" . $aEntry['comment_data']['return'] . "\n";
+            }
         }
 
         if(count($aEntry['comment_data']['sa']) > 0) {
             $aOut .= "\n";
-            $aOut .= "\t" . 'See Also' . "\n";
-            $aOut .= "\t" . '----------' . "\n";
+            if($theStyle == 0) {
+                $aOut .= "\t" . 'See Also' . "\n";
+                $aOut .= "\t" . '----------' . "\n";
+            } else {
+                $aOut .= "\t" . 'See Also:' . "\n";
+            }
+
             foreach($aEntry['comment_data']['sa'] as $aSaEntry) {
-                $aOut .= "\t" . $aSaEntry . "\n";
+                $aOut .= ($theStyle == 0 ? '' : "\t") . "\t" . pythonifyString($aSaEntry) . "\n";
             }
         }
 
@@ -309,6 +328,7 @@ $aOptions = array(
     "input:",
     "output:",
     "body:",
+    "style:",
     "help"
 );
 
@@ -324,6 +344,9 @@ if(isset($aArgs['h']) || isset($aArgs['help']) || $argc <= 2) {
      echo "                   it will be created.\n";
      echo " --body=<str>      String to be used as the body of all transcribed\n";
      echo "                   functions. By default, \"print('TODO')\" is used as body.\n";
+     echo " --style=<int>     Google's Python Style Guide to be used. If 0 is informed,\n";
+     echo "                   the deprecated guide will be used. If 1 (default) is\n";
+     echo "                   informed, the most recent guide will be used.\n";
      echo " --help, -h        Show this help.\n";
      echo "\n";
      exit(1);
@@ -332,6 +355,7 @@ if(isset($aArgs['h']) || isset($aArgs['help']) || $argc <= 2) {
 $aInputPath = isset($aArgs['input']) ? $aArgs['input'] : '';
 $aOutputPath = isset($aArgs['output']) ? $aArgs['output'] : '';
 $aFunctionBody = isset($aArgs['body']) ? $aArgs['body'] : 'print(\'TODO\')';
+$aStyle = isset($aArgs['style']) ? $aArgs['style'] : 1;
 
 $aInputFile = fopen($aInputPath, 'r');
 
@@ -355,7 +379,7 @@ foreach($aFunctions as $aKey => $aEntry) {
     $aFunctions[$aKey]['signature_data'] = parseFunctionSignature($aEntry['signature']);
 }
 
-outputData($aOutputPath, $aFunctions, $aInputPath, $aFunctionBody);
+outputData($aOutputPath, $aFunctions, $aInputPath, $aFunctionBody, $aStyle);
 
 echo 'Python transcribe finished successfuly!' . "\n";
 echo 'Output file: ' . $aOutputPath . "\n";
